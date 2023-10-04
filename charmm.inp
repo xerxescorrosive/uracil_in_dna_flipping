@@ -1,0 +1,232 @@
+* charmm
+
+set toppar ~/charmm/c47b2-051123/toppar
+
+ioformat exte
+
+open unit 1 read card name @toppar/top_all36_na.rtf
+read rtf card unit 1
+close unit 1
+
+open unit 1 read card name @toppar/par_all36_na.prm
+read param card flex unit 1
+close unit 1
+
+stream @toppar/toppar_water_ions.str
+
+open unit 1 read card name a_@sq.pdb
+read sequ pdb unit 1
+close unit 1
+
+generate a setup first 5ter last 3ter
+
+!# deo5 is not correct for 5' non-terminal, but this 
+!# is fine for building 
+patch deo5 a 1 setup
+patch deo5 a 2 setup
+patch deo5 a 3 setup
+patch deo5 a 4 setup
+patch deo5 a 5 setup
+patch deo5 a 6 setup
+patch deo5 a 7 setup
+patch deo5 a 8 setup
+patch deo5 a 9 setup
+patch deo5 a 10 setup
+patch deo5 a 11 setup
+patch deo5 a 12 setup
+
+auto angl dihe
+
+open unit 1 read card name a_@sq.pdb
+read coor pdb unit 1
+close unit 1
+
+open unit 1 read card name b_@sq.pdb
+read sequ pdb unit 1
+close unit 1
+
+generate b setup first 5ter last 3ter
+
+!# deo5 is not correct for 5' non-terminal, but this 
+!# is fine for building 
+patch deo5 b 13 setup
+patch deo5 b 14 setup
+patch deo5 b 15 setup
+patch deo5 b 16 setup
+patch deo5 b 17 setup
+patch deo5 b 18 setup
+patch deo5 b 19 setup
+patch deo5 b 20 setup
+patch deo5 b 21 setup
+patch deo5 b 22 setup
+patch deo5 b 23 setup
+patch deo5 b 24 setup
+
+auto angl dihe
+
+open unit 1 read card name b_@sq.pdb
+read coor pdb unit 1 offs 0
+close unit 1
+
+ic param
+ic fill preserve
+ic build
+
+hbuild select type h* end
+
+!#======================================
+
+coor orie
+coor stat
+coor trans xdir -?xave ydir -?yave zdir -?zave
+
+open unit 1 write card name @sq.pdb
+write coor pdb unit 1
+close unit 1
+open unit 1 write card name @sq.cor
+write coor card unit 1
+close unit 1
+
+
+!#========= flip U9 segid A =======================
+
+define ringu select type n1 .or. type c2 .or. type n3 .or. type c4 .or. type c5 .or. type c6 -
+  .or. type o2 .or. type o4 end
+define ringt select type n1 .or. type c2 .or. type n3 .or. type c4 .or. type c5 .or. type c6 -
+  .or. type o2 .or. type c5m .or. type o4 end
+define ringc select type n1 .or. type c2 .or. type n3 .or. type c4 .or. type c5 .or. type c6 -
+  .or. type o2 .or. type n4 end
+
+define ringa select type n9 .or. type c8 .or. type n7 .or. type c4 .or. type c5 .or. type c6 -
+  .or. type n1 .or. type c2 .or. type n3 .or. type n6 end
+define ringg select type n9 .or. type c8 .or. type n7 .or. type c4 .or. type c5 .or. type c6 -
+  .or. type n1 .or. type c2 .or. type n3 .or. type o6 .or. type n2 end
+
+define sugarring select type c1' .or. type c2' .or. type c3' .or. type c4' .or. type o4' -
+   .or. type o3' end
+
+
+!# base rings basepair 3' of uracil ; here THY A 10 -- ADE B 25
+!# sugar ring 3' of uracil (same strand as uracil)
+!# sugar ring uracil
+!# base ring uracil
+
+
+set n @m
+
+incr n by 1
+
+set q 25
+
+decr q by @m
+
+
+quick select ( (segid a .and. resid @n .and. ringt) .or. (segid b .and. resid @q .and. ringa) ) end mass -
+      select ( (segid a .and. resid @n .and. sugarring) ) end mass -
+      select ( (segid a .and. resid @m .and. sugarring) ) end mass -
+      select ( (segid a .and. resid @m .and. ringu) ) end mass
+
+set r  @q
+
+incr r by 1
+
+cons fix select .not. (( segid a .and. (resid @m : @n )) .or. (segid b .and. (resid @q : @r ) )) end
+
+!# distance dependent dielectric for vacuum only (very bad otherwise)
+nbond atom shift rdie cutnb 13.0 ctofnb 12.0 ctonnb 8.0
+
+!# major groove (neg flipping)
+set target -100
+set angle -20
+
+label loop1
+
+if @angle .ge. @target then
+  mmfp
+    geo sphere rcm dihe -
+      harm symm force 100.0 tref @angle -
+      select ( (segid a .and. resid @n .and. ringt) .or. (segid b .and. resid @q .and. ringa) ) end -
+      select ( (segid a .and. resid @n .and. sugarring) ) end -
+      select ( (segid a .and. resid @m .and. sugarring) ) end -
+      select ( (segid a .and. resid @m .and. ringu) ) end
+  end
+
+  mini sd nstep 200 nprint 100
+  mini abnr nstep 500 nprint 100
+
+  mmfp
+    geo reset
+  end
+
+  quick select ( (segid a .and. resid @n .and. ringt) .or. (segid b .and. resid @q .and. ringa) ) end mass -
+        select ( (segid a .and. resid @n .and. sugarring) ) end mass -
+        select ( (segid a .and. resid @m .and. sugarring) ) end mass -
+        select ( (segid a .and. resid @m .and. ringu) ) end mass
+
+  open unit 1 write card name @sq-major.pdb
+  title
+  * desired @angle actual ?PHI
+  *
+  write coor pdb unit 1
+  close unit 1
+  open unit 1 write card name @sq-major.cor
+  write coor card unit 1
+  close unit 1
+
+  decr angle by 20
+
+  goto loop1
+endif
+
+
+!# minor groove (pos flipping)
+open unit 1 read card name @sq.cor
+read coor card unit 1
+close unit 1
+
+set target 160
+set angle 20
+
+label loop2
+
+if @angle .le. @target then
+  mmfp
+    geo sphere rcm dihe -
+      harm symm force 150.0 tref @angle -
+      select ( (segid a .and. resid @n .and. ringt) .or. (segid b .and. resid @q .and. ringa) ) end -
+      select ( (segid a .and. resid @n .and. sugarring) ) end -
+      select ( (segid a .and. resid @m .and. sugarring) ) end -
+      select ( (segid a .and. resid @m .and. ringu) ) end
+  end
+
+  mini sd nstep 200 nprint 100
+  mini abnr nstep 500 nprint 100
+
+  mmfp
+    geo reset
+  end
+
+  quick select ( (segid a .and. resid @n .and. ringt) .or. (segid b .and. resid @q .and. ringa) ) end mass -
+        select ( (segid a .and. resid @n .and. sugarring) ) end mass -
+        select ( (segid a .and. resid @m .and. sugarring) ) end mass -
+        select ( (segid a .and. resid @m .and. ringu) ) end mass
+
+  open unit 1 write card name @sq-minor.pdb
+  title
+  * desired @angle actual ?PHI
+  *
+  write coor pdb unit 1
+  close unit 1
+  open unit 1 write card name @sq-minor.cor
+  write coor card unit 1
+  close unit 1
+
+  incr angle by 20
+  
+  goto loop2
+
+endif
+
+stop
+
+
